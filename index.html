@@ -4,10 +4,598 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Particle Hunter — v0.7.26 (Hybrid + Connectivity + Verb fix)</title>
-<!-- Full HTML from your provided code above goes here -->
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",Meiryo,sans-serif;background:#f7f7f9;margin:0;color:#222}
+  header{background:#fff;border-bottom:1px solid #e5e7eb;padding:.75rem 1rem;position:sticky;top:0;z-index:10}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+  h1{margin:0;font-size:1.05rem}
+  main{max-width:980px;margin:0 auto;padding:1.25rem}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1rem;margin:1rem 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .sentence{font-size:1.6rem;user-select:none}
+  .token{display:inline-block;border-radius:6px;cursor:pointer;transition:background .12s,box-shadow .12s}
+  body:not(.noHover) .token:hover{background:#f0f9ff;box-shadow:inset 0 0 0 1px #bae6fd}
+  .picked{background:#e0f2fe;box-shadow:inset 0 0 0 1px #7dd3fc}
+  .good{background:#dcfce7!important;box-shadow:inset 0 0 0 1px #86efac!important}
+  .bad{box-shadow:inset 0 0 0 2px #f87171!important}
+  .miss{background:#fecaca!important;box-shadow:inset 0 0 0 1px #ef4444!important}
+  button{border:1px solid #d1d5db;background:#fff;padding:.55rem .8rem;border-radius:10px;cursor:pointer;font-size:.95rem}
+  button.primary{background:#111827;color:#fff;border-color:#111827}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .pill{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .5rem;border:1px solid #e5e7eb;border-radius:999px;font-size:.85rem;background:#fff}
+  .stats{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem}
+  .muted{color:#6b7280;font-size:.9rem}
+  .row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;justify-content:space-between}
+  .banner{display:none;border:1px solid #fecaca;background:#fff1f2;color:#7f1d1d;padding:.6rem .8rem;border-radius:10px;margin:.75rem 0}
+  .banner.show{display:block}
+  .banner.good{border-color:#bbf7d0;background:#f0fdf4;color:#065f46}
+  .debug{font-family:ui-monospace,monospace;font-size:.85rem;white-space:pre-wrap;background:#f9fafb;border:1px dashed #e5e7eb;padding:.5rem;border-radius:8px;color:#374151}
+  .next-success{box-shadow:0 0 0 2px #22c55e inset}
+  .next-warn{box-shadow:0 0 0 2px #fbbf24 inset}
+  #breakdownBox.bd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}
+  #err{display:none;margin:0;padding:.6rem .8rem;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px}
+  #err.show{display:block}
+</style>
 </head>
-<body>
-<!-- body content identical to the version you pasted -->
-<p>Placeholder: This canvas contains the complete code for Particle Hunter v0.7.26 Hybrid build, as pasted in the previous message. You can copy this to a file named index.html and push to GitHub for hosting.</p>
+<body class="noHover">
+<header>
+  <div class="head">
+    <h1>Particle Hunter <span class="muted">v0.7.26</span> <span class="pill" id="modePill">Core</span></h1>
+    <button id="toggleDebugBtn">Debug Mode: <span id="debugState">ON</span></button>
+  </div>
+</header>
+
+<main>
+  <p id="err"></p>
+
+  <div id="introCard" class="card intro">
+    <h2>🌸 The Goal</h2>
+    <p><strong>Think in Japanese by reading Japanese.</strong> English relies on word order; Japanese relies on tiny glue-words. Train your eyes to find them first.</p>
+    <div class="example" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:.6rem .8rem;margin:.5rem 0;font-family:ui-monospace,monospace;font-size:.95rem;">
+      犬<strong>が</strong> 人<strong>を</strong> 噛んだ<br/>人<strong>を</strong> 犬<strong>が</strong> 噛んだ<br/>
+      <span class="muted">Both read “The dog bit the man.” The glue-words anchor roles.</span>
+    </div>
+    <button id="startBtn" class="primary">Start</button>
+  </div>
+
+  <div class="card" id="gameCard">
+    <div class="row">
+      <div class="muted"><strong>Goal:</strong> Click all glue-words in the sentence, then press <strong>Check</strong>.</div>
+      <div class="pill"><span>Keys:</span> <strong>Space</strong> check/next · <strong>C</strong> check · <strong>N</strong> next</div>
+    </div>
+
+    <div id="cargoBanner" class="banner" role="alert"><strong>Hey, you left cargo on the platform!</strong></div>
+    <div id="streamBanner" class="banner" role="alert" style="display:none;"></div>
+    <div id="levelBanner" class="banner good" role="status">Mastery achieved — Level 2 unlocked.</div>
+
+    <div class="sentence" id="sentence"></div>
+
+    <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+      <button id="checkBtn" class="primary">Check</button>
+      <button id="nextBtn">Next</button>
+      <button id="revealBtn">Reveal answer</button>
+      <button id="resetBtn">Reset</button>
+      <button id="toggleParticlesBtn">Show particle list</button>
+      <button id="toggleMyNotesBtn">Show my notes</button>
+    </div>
+
+    <div class="stats" id="stats"></div>
+    <div id="breakdownBox" class="debug" style="display:none;margin-top:.5rem;"></div>
+
+    <div class="notes" id="notesBlock" style="display:none;">
+      <h4>Notes</h4><ul id="notesList"></ul>
+    </div>
+
+    <div class="card" id="particleListCard" style="display:none;margin-top:.75rem;">
+      <strong>Particle reference</strong>
+      <div class="muted">Multi-character first, then singles. Ambiguities like 「には」 are treated as に + は.</div>
+      <ul class="muted">
+        <li>Multi-char: から, まで, より, って, しか, など</li>
+        <li>Single-char: は, が, を, に, へ, で, と, も, や, の</li>
+      </ul>
+    </div>
+
+    <div class="myNotes" id="myNotesBlock" style="display:none;margin-top:.75rem;">
+      <h4>My Notes (unlocked this session)</h4><ul id="myNotesList"></ul>
+    </div>
+  </div>
+
+  <div class="card" id="settingsCard">
+    <strong>Settings</strong>
+    <div class="muted">Hard Mode splits non-particles into characters; multi-character particles stay grouped. Stacked notes are always on.</div>
+    <div style="display:grid;gap:.4rem;margin-top:.5rem;">
+      <label><input type="checkbox" id="hardMode"> Hard mode</label>
+      <label><input type="checkbox" id="hoverHints"> Enable hover highlights</label>
+      <label><input type="checkbox" id="strictMode"> Strict mode (disable Reveal)</label>
+      <label><input type="checkbox" id="trapMode"> Trap mode (extra distractors)</label>
+      <label><input type="checkbox" id="showCounts" checked> Show particle count in debug</label>
+      <label><input type="checkbox" id="persistNotes"> Keep stacked gloss notes (session)</label>
+      <label><input type="checkbox" id="autoProgress" checked> Auto-progress (streak-based)</label>
+      <label><input type="checkbox" id="betaGloss"> Beta: Particle gloss + sentence meaning</label>
+      <label><input type="checkbox" id="betaSkeleton"> Beta: Skeleton view</label>
+      <label><input type="checkbox" id="betaTrain"> Beta: Train-car breakdown</label>
+      <label><input type="checkbox" id="tatoebaStream"> Stream: Tatoeba (hybrid)</label>
+      <label>Batch size
+        <select id="tatoebaBatch"><option>10</option><option selected>25</option><option>50</option></select>
+      </label>
+      <label>Max JP length
+        <select id="tatoebaMaxLen"><option>16</option><option selected>24</option><option>36</option><option>60</option></select>
+      </label>
+    </div>
+  </div>
+
+  <div class="card" id="debugCard">
+    <strong>Debug</strong>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0;">
+      <button id="copyDebugBtn">Copy debug snapshot</button>
+      <button id="factoryBtn">Factory Reset (first-run)</button>
+    </div>
+    <div id="debugArea" class="debug">Ready.</div>
+  </div>
+</main>
+
+<script>
+/* ===== Visible error so failures never look blank ===== */
+function showErr(msg){var el=document.getElementById('err');el.textContent="Script error: "+msg;el.className="show";}
+
+/* ===== Optional external tokenizer hook ===== */
+function tokenizerHook(sentence){return null;}
+
+/* ===== Core data ===== */
+var CORE=[
+  {text:"私は日本語を勉強している。"},
+  {text:"明日学校でテストがある。"},
+  {text:"駅まで歩いて行く。"},
+  {text:"友達と映画を見た。"},
+  {text:"図書館で本を借りた。"},
+  {text:"昼ご飯にカレーを食べた。"},
+  {text:"猫が庭にいる。"},
+  {text:"東京へ引っ越した。"},
+  {text:"七時に起きて、会社へ行く。"},
+  {text:"この本は太郎にあげた。"},
+  {text:"親より背が高い。"},
+  {text:"牛乳しか飲まない。"},
+  {text:"駅から家まで走った。"},
+  {text:"先生とも話した。"},
+  {text:"日本の文化について学ぶ。"},
+  {text:"明日も仕事がある。"},
+  {text:"これは私のです。"},
+  {text:"公園で子供と遊ぶ。"}
+];
+var TRAPS=[
+  {text:"にんじんを食べる。",exceptions:[{start:0,end:1}]},
+  {text:"ノートにのりをつけた。",exceptions:[{start:4,end:5}]},
+  {text:"できるだけ早く帰る。",exceptions:[{start:0,end:1}]},
+  {text:"この本を読んだ。",exceptions:[{start:0,end:2}]},
+  {text:"その映画は面白い。",exceptions:[{start:0,end:2}]}
+];
+
+var MULTI=["から","まで","より","って","しか","など"];
+var SINGLE=["は","が","を","に","へ","で","と","も","や","の"];
+var ALL=[].concat(MULTI,SINGLE);
+
+var GLOSS={"は":"topic / lens","が":"identifier / subject","を":"direct object","に":"target / time / existence","へ":"direction (towards)","で":"place of action / means","と":"and / with / quotative","も":"also / even","や":"non-exhaustive ‘and’","の":"possessive / attributive","から":"from / since","まで":"until / as far as","より":"than (comparison)","しか":"only (…ない)","って":"informal quotative/topic","など":"such as / etc."};
+
+var DEMO_EXCEPTIONS=["この","その","あの","どの","こんな","そんな","あんな","どんな"];
+var SEQ_EXCEPTIONS=["です","でした"];
+var WORD_EXCEPTIONS=["おにぎり","のり","はなし","にんじん","できる"];
+
+// Meanings used by beta “Sentence meaning”
+var MEANINGS={
+  "駅まで歩いて行く。":"(I) walk to the station.",
+  "この本は太郎にあげた。":"(I) gave this book to Tarō.",
+  "昼ご飯にカレーを食べた。":"(I) ate curry for lunch.",
+  "公園で子供と遊ぶ。":"(I) play with children at the park.",
+  "私は日本語を勉強している。":"(I) am studying Japanese.",
+  "図書館で本を借りた。":"(I) borrowed a book at the library.",
+  "猫が庭にいる。":"A cat is in the yard.",
+  "駅から家まで走った。":"(I) ran from the station to home.",
+  "明日学校でテストがある。":"There is a test at school tomorrow."
+};
+
+/* ===== Persistence & state ===== */
+var KEY="phSettingsV0726";
+var state={
+  idx:0,hard:false,hover:false,strict:false,trap:false,showCounts:true,
+  cargoShown:false,perGlossSeen:{},rounds:[],level2Ready:false,levelBannerDismissed:false,
+  persistNotes:false,glossLog:[],autoProgress:true,introSeen:false,myNotesOpen:false,debugMode:true,
+
+  // Hybrid stream
+  tatoebaStream:false,tatoebaBatch:25,tatoebaMaxLen:24,tatoebaCache:[],tatoebaLastAt:0,
+  tatoebaStatus:"unknown",tatoebaLastErr:"",
+
+  // Beta toggles
+  betaGloss:false,betaSkeleton:false,betaTrain:false,
+
+  _storageDisabled:false
+};
+function save(){if(state._storageDisabled)return;try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){state._storageDisabled=true;}}
+function load(){try{var s=localStorage.getItem(KEY);if(s)Object.assign(state,JSON.parse(s));}catch(e){}}
+function factoryReset(){if(!confirm("Factory Reset?"))return;try{localStorage.removeItem(KEY);}catch(e){}location.reload();}
+
+/* ===== Stream connectivity helpers ===== */
+function showStreamBanner(msg){
+  var el=document.getElementById("streamBanner");
+  if(!el)return;
+  el.innerHTML="<strong>Live stream unavailable.</strong> "+(msg||"Use a local server (not file://) or check your connection.");
+  el.style.display="block";
+}
+function hideStreamBanner(){
+  var el=document.getElementById("streamBanner"); if(el) el.style.display="none";
+}
+async function testTatoebaConnectivity(timeoutMs){
+  if(location.protocol==="file:"){
+    state.tatoebaStatus="blocked";
+    state.tatoebaLastErr="Blocked on file:// — run a local server (e.g., python3 -m http.server)."; save(); return false;
+  }
+  if(navigator && navigator.onLine===false){
+    state.tatoebaStatus="offline"; state.tatoebaLastErr="Offline"; save(); return false;
+  }
+  var ctrl=new AbortController(); var to=setTimeout(function(){ctrl.abort();},timeoutMs||3000);
+  try{
+    var probe="https://tatoeba.org/en/api_v0/search?from=jpn&sort=random&page=1";
+    var res=await fetch(probe,{mode:"cors",signal:ctrl.signal});
+    clearTimeout(to);
+    if(!res.ok){ state.tatoebaStatus=(navigator.onLine===false)?"offline":"blocked"; state.tatoebaLastErr="HTTP "+res.status; save(); return false; }
+    state.tatoebaStatus="ok"; state.tatoebaLastErr=""; save(); return true;
+  }catch(e){
+    clearTimeout(to);
+    state.tatoebaStatus=(navigator.onLine===false)?"offline":"blocked";
+    state.tatoebaLastErr=(e&&e.message)?e.message:"Fetch failed"; save(); return false;
+  }
+}
+
+/* ===== Bind settings (sticky) ===== */
+function bindSettings(){
+  ["hardMode","hoverHints","strictMode","trapMode","showCounts","persistNotes","autoProgress",
+   "betaGloss","betaSkeleton","betaTrain","tatoebaStream"].forEach(function(id){
+    var el=document.getElementById(id); if(!el)return;
+    if(id==="tatoebaStream"){
+      el.addEventListener("change",async function(e){
+        state.tatoebaStream=!!e.target.checked; save();
+        if(state.tatoebaStream){
+          hideStreamBanner();
+          var ok=await testTatoebaConnectivity(3000);
+          if(!ok){ showStreamBanner(state.tatoebaLastErr); state.tatoebaStream=false; save(); syncUI(); }
+          else{ refillTatoebaIfNeeded(); }
+        }else{ hideStreamBanner(); }
+      });
+    }else{
+      el.addEventListener("change",function(e){
+        state[id]=!!e.target.checked; save();
+        if(id==="trapMode"){ state.idx=0; }
+        if(id==="hardMode"){ render(true);} else { syncUI(); }
+      });
+    }
+  });
+  document.getElementById("tatoebaBatch").addEventListener("change",function(e){
+    state.tatoebaBatch=parseInt(e.target.value,10)||25; save();
+  });
+  document.getElementById("tatoebaMaxLen").addEventListener("change",function(e){
+    state.tatoebaMaxLen=parseInt(e.target.value,10)||24; save();
+  });
+}
+
+/* ===== Helpers & tokenization ===== */
+var IDLE_CUTOFF=12.0;
+function reserveWords(sentence,used,reserved){
+  for(var wi=0;wi<WORD_EXCEPTIONS.length;wi++){
+    var w=WORD_EXCEPTIONS[wi],idx=0;
+    while(true){var pos=sentence.indexOf(w,idx);if(pos===-1)break;
+      reserved.push({start:pos,end:pos+w.length});
+      for(var k=0;k<w.length;k++)used[pos+k]=true;
+      idx=pos+w.length;
+    }
+  }
+}
+function exceptsFor(item){return item.exceptions||[];}
+function isExcepted(i,len,exceptions){if(!exceptions.length)return false;var s=i,e=i+len;for(var k=0;k<exceptions.length;k++){var ex=exceptions[k];if(Math.max(s,ex.start)<Math.min(e,ex.end))return true;}return false;}
+function annotate(sentence,hardMode,exceptions){
+  var ext=tokenizerHook(sentence); if(Array.isArray(ext))return ext;
+  var marks=[],used=new Array(sentence.length).fill(false),reserved=[];
+  reserveWords(sentence,used,reserved);
+  for(var i=0;i<sentence.length;i++){for(var d=0;d<DEMO_EXCEPTIONS.length;d++){var w=DEMO_EXCEPTIONS[d];if(sentence.startsWith(w,i)){reserved.push({start:i,end:i+w.length});for(var k=0;k<w.length;k++)used[i+k]=true;i+=w.length-1;break;}}}
+  for(var j=0;j<sentence.length;j++){for(var s=0;s<SEQ_EXCEPTIONS.length;s++){var w2=SEQ_EXCEPTIONS[s];if(sentence.startsWith(w2,j)){reserved.push({start:j,end:j+w2.length});for(var k2=0;k2<w2.length;k2++)used[j+k2]=true;j+=w2.length-1;break;}}}
+  function markAt(ii,list){
+    for(var li=0;li<list.length;li++){
+      var p=list[li];
+      if(sentence.startsWith(p,ii)){
+        if(isExcepted(ii,p.length,reserved)||isExcepted(ii,p.length,exceptions))continue;
+        var ok=true;for(var kk=0;kk<p.length;kk++){if(used[ii+kk]){ok=false;break;}}
+        if(!ok)continue;
+        for(var kk2=0;kk2<p.length;kk2++)used[ii+kk2]=true;
+        marks.push({start:ii,end:ii+p.length,text:p});return p.length;
+      }
+    } return 0;
+  }
+  for(var x=0;x<sentence.length;x++){var adv=markAt(x,MULTI);if(adv)x+=adv-1;}
+  for(var y=0;y<sentence.length;y++){if(used[y])continue;var ch=sentence[y];
+    if(SINGLE.indexOf(ch)>-1 && !isExcepted(y,1,reserved) && !isExcepted(y,1,exceptions)){
+      used[y]=true;marks.push({start:y,end:y+1,text:ch});
+    }
+  }
+  marks.sort(function(a,b){return a.start-b.start;});
+  var tokens=[],idx=0;
+  for(var m=0;m<marks.length;m++){
+    var mk=marks[m];
+    if(idx<mk.start){
+      var chunk=sentence.slice(idx,mk.start);
+      if(hardMode){for(var ci=0;ci<chunk.length;ci++)tokens.push({text:chunk[ci],isParticle:false});}
+      else{tokens.push({text:chunk,isParticle:false});}
+    }
+    tokens.push({text:sentence.slice(mk.start,mk.end),isParticle:true});
+    idx=mk.end;
+  }
+  if(idx<sentence.length){
+    var tail=sentence.slice(idx);
+    if(hardMode){for(var ti=0;ti<tail.length;ti++)tokens.push({text:tail[ti],isParticle:false});}
+    else{tokens.push({text:tail,isParticle:false});}
+  }
+  return tokens;
+}
+
+/* ===== Train-car breakdown ===== */
+var JP=/[一-龯ぁ-んァ-ンー]/;
+var EN_NOUN={"昼ご飯":"lunch","カレー":"curry","駅":"station","家":"house","本":"book","図書館":"library","猫":"cat","庭":"yard","公園":"park","子供":"children","日本語":"Japanese","会社":"company","太郎":"Tarō","明日":"tomorrow","学校":"school","週末":"weekend"};
+var ROLE={"に":"target","を":"object","で":"place/means","へ":"direction","が":"subject","は":"topic","の":"of/’s","から":"from","まで":"to","より":"than","しか":"only","って":"quot./topic","など":"etc."};
+var EN_VERB={"食べた":"ate","走った":"ran","見た":"saw/watched","行った":"went","行く":"go","来た":"came","来る":"come","遊ぶ":"play","借りた":"borrowed","勉強している":"am studying","あげた":"gave","いる":"is/are","ある":"there is/are","引っ越した":"moved"};
+function carGlueLines(tokens){
+  var lines=[];
+  // host + particle
+  for(var i=0;i<tokens.length;i++){
+    var t=tokens[i]; if(!t.isParticle)continue;
+    var hostParts=[],j=i-1;
+    while(j>=0 && !tokens[j].isParticle && JP.test(tokens[j].text)){hostParts.unshift(tokens[j].text);break;}
+    var hostJP=(hostParts.join("")||"…").replace(/\s+/g,"");
+    var hostEN=EN_NOUN[hostJP]||hostJP;
+    var role=ROLE[t.text]||"particle";
+    lines.push(hostJP+" "+t.text+" — "+hostEN+" ("+role+")");
+  }
+  // final verb/predicate (robust)
+  (function(){
+    if(!tokens.length)return;
+    var k=tokens.length-1;
+    while(k>=0 && !tokens[k].isParticle && /[。！？!?]/.test(tokens[k].text)){k--;}
+    var tail=[];
+    while(k>=0 && !tokens[k].isParticle && JP.test(tokens[k].text)){
+      tail.unshift(tokens[k].text);
+      if(k-1>=0 && tokens[k-1].isParticle)break;
+      k--;
+    }
+    if(!tail.length)return;
+    var core=tail.join(""); var clean=core.replace(/[。！？!?]+$/,"");
+    var en=EN_VERB[clean]||"verb";
+    var endPunct=/[。！？!?]$/.test(tokens[tokens.length-1].text)?"。":"";
+    lines.push(clean+endPunct+" — "+en);
+  })();
+  return lines;
+}
+
+/* ===== Hybrid stream (Tatoeba) ===== */
+var PARTICLES=[].concat(MULTI,SINGLE);
+function hasParticles(s){for(var i=0;i<PARTICLES.length;i++){if(s.indexOf(PARTICLES[i])>-1)return true;}return false;}
+function buildSeenSet(){
+  var seen=Object.create(null);
+  for(var i=0;i<CORE.length;i++)seen[CORE[i].text]=1;
+  if(Array.isArray(state.tatoebaCache))for(var j=0;j<state.tatoebaCache.length;j++)seen[state.tatoebaCache[j].text]=1;
+  return seen;
+}
+function parseTatoeba(json,maxLen){
+  var out=[]; if(!json||!json.results)return out;
+  for(var i=0;i<json.results.length;i++){
+    var r=json.results[i], jp=(r.text||r.sentence||"").trim(), lang=r.lang||r.language||r.from||"";
+    if(lang!=="jpn"||!jp)continue;
+    if(maxLen && jp.replace(/\s+/g,"").length>maxLen)continue;
+    if(!hasParticles(jp))continue;
+    var en=""; if(r.translations&&r.translations.length){
+      for(var t=0;t<r.translations.length;t++){var tr=r.translations[t]; if((tr.lang||tr.language)==="eng"&&tr.text){en=tr.text.trim();break;}}
+    }
+    if(jp.charAt(jp.length-1)!=="。")jp+="。";
+    out.push({text:jp,meaning:en});
+  } return out;
+}
+function tatoebaUrl(page){var p=page||1;return "https://tatoeba.org/en/api_v0/search?from=jpn&sort=random&trans_filter=limit&orphans=no&has_audio=no&page="+p;}
+async function refillTatoebaIfNeeded(){
+  if(!state.tatoebaStream)return;
+  if(!Array.isArray(state.tatoebaCache))state.tatoebaCache=[];
+  if(state.tatoebaCache.length>=state.tatoebaBatch)return;
+  var now=Date.now(); if(now-(state.tatoebaLastAt||0)<2000)return;
+  try{
+    var want=state.tatoebaBatch,maxLen=state.tatoebaMaxLen||24,seen=buildSeenSet(),added=0,tries=0;
+    while(added<want && tries<6){
+      tries++; var page=1+Math.floor(Math.random()*20);
+      var res=await fetch(tatoebaUrl(page),{mode:"cors"}); if(!res.ok)break;
+      var items=parseTatoeba(await res.json(),maxLen);
+      for(var i=0;i<items.length && added<want;i++){
+        var it=items[i]; if(seen[it.text])continue; seen[it.text]=1;
+        state.tatoebaCache.push(it);
+        if(it.meaning && !MEANINGS[it.text])MEANINGS[it.text]=it.meaning;
+        added++;
+      }
+    }
+    state.tatoebaLastAt=Date.now(); save();
+  }catch(e){/* silent: offline/CORS */}
+}
+
+/* ===== UI state ===== */
+var tokens=[],picked=new Set();
+function updatePill(){document.getElementById("modePill").textContent=state.trap?"Brutal (Trap)":"Core";}
+function renderNotes(items){
+  var block=document.getElementById("notesBlock"),list=document.getElementById("notesList");
+  list.innerHTML=""; if(!items.length){block.style.display="none";return;}
+  for(var i=0;i<items.length;i++){var li=document.createElement("li");li.textContent=items[i];list.appendChild(li);}
+  block.style.display="block";
+}
+function buildUnlockedNotes(){var keys=[];for(var k in state.perGlossSeen){if(state.perGlossSeen[k])keys.push(k);}var order=MULTI.concat(SINGLE);keys.sort(function(a,b){return order.indexOf(a)-order.indexOf(b);});var out=[];for(var i=0;i<keys.length;i++){var key=keys[i];out.push(key+" = "+(GLOSS[key]||"particle"));}return out;}
+function renderMyNotes(){var list=document.getElementById("myNotesList");list.innerHTML="";var all=buildUnlockedNotes();if(!all.length){var li=document.createElement("li");li.textContent="No notes unlocked yet.";list.appendChild(li);return;}for(var i=0;i<all.length;i++){var li2=document.createElement("li");li2.textContent=all[i];list.appendChild(li2);}}
+function resetNextBtn(){var n=document.getElementById("nextBtn");n.classList.remove("next-success");n.classList.remove("next-warn");}
+function clearAccPills(){var pills=document.querySelectorAll("#stats .pill");for(var i=0;i<pills.length;i++){var txt=(pills[i].textContent||"").trim();if(txt.indexOf("Acc ")===0)pills[i].remove();}}
+function syncUI(){
+  document.body.classList.toggle("noHover",!state.hover);
+  document.getElementById("revealBtn").disabled=state.strict;
+  document.getElementById("hardMode").checked=!!state.hard;
+  document.getElementById("hoverHints").checked=!!state.hover;
+  document.getElementById("strictMode").checked=!!state.strict;
+  document.getElementById("trapMode").checked=!!state.trap;
+  document.getElementById("showCounts").checked=!!state.showCounts;
+  document.getElementById("persistNotes").checked=!!state.persistNotes;
+  document.getElementById("autoProgress").checked=!!state.autoProgress;
+  document.getElementById("betaGloss").checked=!!state.betaGloss;
+  document.getElementById("betaSkeleton").checked=!!state.betaSkeleton;
+  document.getElementById("betaTrain").checked=!!state.betaTrain;
+  document.getElementById("tatoebaStream").checked=!!state.tatoebaStream;
+  document.getElementById("tatoebaBatch").value=String(state.tatoebaBatch||25);
+  document.getElementById("tatoebaMaxLen").value=String(state.tatoebaMaxLen||24);
+
+  updatePill();
+  document.getElementById("debugCard").style.display="block";
+  document.getElementById("settingsCard").style.display="block";
+  document.getElementById("debugState").textContent=state.debugMode?"ON":"OFF";
+
+  document.getElementById("myNotesBlock").style.display=state.myNotesOpen?"block":"none";
+  document.getElementById("toggleMyNotesBtn").textContent=state.myNotesOpen?"Hide my notes":"Show my notes";
+
+  var dbg=document.getElementById("debugArea");
+  if(state.showCounts){
+    var count=tokens.filter(function(t){return t.isParticle;}).length;
+    dbg.textContent="v0.7.26 | Particles: "+count;
+  }else{dbg.textContent="v0.7.26";}
+  // stream status note
+  var st=state.tatoebaStatus||"unknown"; var note=" | Stream: "+st+(state.tatoebaLastErr?(" ("+state.tatoebaLastErr+")"):"");
+  dbg.textContent+=note;
+}
+
+/* ===== Bank ===== */
+function currentBank(){
+  var base=CORE.slice();
+  if(state.tatoebaStream && Array.isArray(state.tatoebaCache) && state.tatoebaCache.length){
+    var stream=state.tatoebaCache.map(function(it){return {text:it.text};});
+    var out=[],i=0,j=0; while(i<base.length||j<stream.length){ if(i<base.length)out.push(base[i++]); if(j<stream.length)out.push(stream[j++]); }
+    base=out;
+  }
+  if(state.trap) base=base.concat(TRAPS);
+  return base;
+}
+
+/* ===== Round flow ===== */
+function render(force){
+  if(typeof force==="undefined")force=false;
+  clearAccPills(); var bd=document.getElementById("breakdownBox"); if(bd)bd.style.display="none";
+  var bank=currentBank(); if(!bank.length){document.getElementById("sentence").textContent="(no sentences)";return;}
+  if(!force) state.idx=(state.idx+1)%bank.length;
+  var item=bank[state.idx], sentence=item.text; state._lastSentence=sentence;
+  tokens=annotate(sentence,state.hard,exceptsFor(item)); picked.clear();
+  var c=document.getElementById("sentence"); c.innerHTML="";
+  for(var i=0;i<tokens.length;i++){
+    (function(i){
+      var t=tokens[i],sp=document.createElement("span");
+      sp.className="token"; sp.textContent=t.text;
+      sp.addEventListener("pointerdown",function(){
+        if(sp.classList.contains("good")||sp.classList.contains("bad")||sp.classList.contains("miss"))return;
+        if(picked.has(i)){picked.delete(i);sp.classList.remove("picked");}
+        else{picked.add(i);sp.classList.add("picked");}
+      });
+      c.appendChild(sp);
+    })(i);
+  }
+  document.getElementById("checkBtn").disabled=false;
+  document.getElementById("nextBtn").disabled=true;
+  resetNextBtn(); document.getElementById("cargoBanner").classList.remove("show");
+  syncUI();
+  if(state.tatoebaStream){ refillTatoebaIfNeeded(); }
+}
+function scoreRound(){
+  var tp=0,fp=0,fn=0,spans=[].slice.call(document.querySelectorAll("#sentence .token")),newGlosses=[];
+  function addGloss(key){ if(ALL.indexOf(key)>-1 && !state.perGlossSeen[key]){ var gloss=GLOSS[key]||"particle"; var line=key+" = "+gloss; newGlosses.push(line); state.perGlossSeen[key]=true; } }
+  for(var i=0;i<tokens.length;i++){
+    var t=tokens[i],p=picked.has(i);
+    if(t.isParticle && p){tp++;spans[i].classList.add("good");addGloss(t.text);}
+    else if(!t.isParticle && p){fp++;spans[i].classList.add("bad");}
+    else if(t.isParticle && !p){fn++;spans[i].classList.add("miss");addGloss(t.text);}
+  }
+  var trueP=tokens.filter(function(t){return t.isParticle;}).length;
+  var acc=trueP===0?(picked.size===0?100:0):(tp/(tp+fp+fn||1))*100;
+  var accP=document.createElement("span");accP.className="pill";accP.textContent="Acc "+acc.toFixed(1)+"%";document.getElementById("stats").appendChild(accP);
+  if(fn>0 && !state.cargoShown){document.getElementById("cargoBanner").classList.add("show");state.cargoShown=true;}
+  if(state.persistNotes){for(var g=0;g<newGlosses.length;g++){if(state.glossLog.indexOf(newGlosses[g])===-1)state.glossLog.push(newGlosses[g]);}renderNotes(state.glossLog);}else{renderNotes(newGlosses);}
+  if(state.myNotesOpen)renderMyNotes();
+
+  // Beta breakdowns
+  var want=state.debugMode&&(state.betaGloss||state.betaSkeleton||state.betaTrain);
+  var box=document.getElementById("breakdownBox");
+  if(box){
+    if(!want){box.style.display="none";box.textContent="";}
+    else{
+      var sentence=state._lastSentence||""; var nat=MEANINGS[sentence]||"(meaning coming soon)"; var sections=[];
+      var uniq=[],order=MULTI.concat(SINGLE);
+      for(var i2=0;i2<tokens.length;i2++){var t2=tokens[i2]; if(t2.isParticle && uniq.indexOf(t2.text)===-1)uniq.push(t2.text);}
+      uniq.sort(function(a,b){return order.indexOf(a)-order.indexOf(b);});
+      if(state.betaGloss){
+        var glossLines=uniq.length?("• "+uniq.map(function(p){return p+" = "+(GLOSS[p]||"particle");}).join("\n• ")):"—";
+        sections.push("Particles in this sentence\n"+glossLines+"\n\nSentence meaning\n"+nat);
+      }
+      if(state.betaSkeleton){
+        var rows=[]; if(sentence.indexOf("まで")>-1){var seg=sentence.split("まで")[0];var piece=(seg.slice(-6)+"まで").replace(/.*?([一-龯ぁ-んァ-ンー]+まで)$/,'$1');rows.push(piece+" → endpoint “to/until …”");}
+        if(sentence.indexOf("に")>-1)rows.push("…に → time/target/existence");
+        if(sentence.indexOf("で")>-1)rows.push("…で → place of action / by means");
+        sections.push("Skeleton view\n"+(rows.length?("• "+rows.join("\n• ")):"—"));
+      }
+      if(state.betaTrain){ sections.push("Train-car breakdown\n"+"• "+carGlueLines(tokens).join("\n• ")); }
+      box.classList.add("bd"); box.style.display="block"; box.textContent=sections.join("\n\n");
+    }
+  }
+
+  var next=document.getElementById("nextBtn");
+  document.getElementById("checkBtn").disabled=true; next.disabled=false; resetNextBtn();
+  if(fp===0 && fn===0){next.classList.add("next-success");}else{next.classList.add("next-warn");}
+  save(); syncUI();
+}
+function revealAnswer(){
+  var spans=[].slice.call(document.querySelectorAll("#sentence .token"));
+  for(var i=0;i<tokens.length;i++){if(tokens[i].isParticle)spans[i].classList.add("miss");}
+  document.getElementById("checkBtn").disabled=true; var next=document.getElementById("nextBtn");
+  next.disabled=false; resetNextBtn(); next.classList.add("next-warn");
+}
+function resetRound(){
+  picked.clear(); var nodes=[].slice.call(document.querySelectorAll("#sentence .token"));
+  for(var i=0;i<nodes.length;i++){nodes[i].classList.remove("picked","good","bad","miss");}
+  document.getElementById("cargoBanner").classList.remove("show"); var bd=document.getElementById("breakdownBox"); if(bd)bd.style.display="none"; resetNextBtn();
+}
+
+/* ===== Controls ===== */
+document.getElementById("checkBtn").onclick=scoreRound;
+document.getElementById("nextBtn").onclick=function(){render(false);};
+document.getElementById("revealBtn").onclick=revealAnswer;
+document.getElementById("resetBtn").onclick=resetRound;
+document.getElementById("toggleParticlesBtn").onclick=function(){var card=document.getElementById("particleListCard");card.style.display=card.style.display==="none"?"block":"none";};
+document.getElementById("toggleMyNotesBtn").onclick=function(){state.myNotesOpen=!state.myNotesOpen;save();if(state.myNotesOpen)renderMyNotes();syncUI();};
+document.getElementById("factoryBtn").addEventListener("click",factoryReset);
+document.getElementById("copyDebugBtn").addEventListener("click",function(){
+  var payload={version:"v0.7.26",sentence:(currentBank()[state.idx]||{}).text,settings:state,tokens:tokens.map(function(t){return {t:t.text,p:t.isParticle};}),picked:Array.from(picked),glossLog:state.glossLog};
+  var text=JSON.stringify(payload,null,2);
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){document.getElementById("debugArea").textContent="Copied debug snapshot:\n"+text;}).catch(function(){document.getElementById("debugArea").textContent="Copy failed. Here it is:\n"+text;});}
+  else{document.getElementById("debugArea").textContent="Clipboard not available. Here it is:\n"+text;}
+});
+document.getElementById("toggleDebugBtn").onclick=function(){state.debugMode=!state.debugMode;save();syncUI();};
+document.addEventListener("keydown",function(e){
+  var tag=(e.target&&e.target.tagName)?e.target.tagName.toLowerCase():""; if(tag==="input"||tag==="textarea")return;
+  var k=(e.key||"").toLowerCase();
+  if(k===" "){e.preventDefault(); if(!document.getElementById("checkBtn").disabled)scoreRound(); else if(!document.getElementById("nextBtn").disabled)render(false); return;}
+  if(k==="c" && !document.getElementById("checkBtn").disabled)scoreRound();
+  if(k==="n" && !document.getElementById("nextBtn").disabled)render(false);
+});
+
+/* ===== Boot ===== */
+try{
+  load();
+  (function boot(){
+    document.getElementById("gameCard").style.display="block";
+    document.getElementById("settingsCard").style.display="block";
+    document.getElementById("debugCard").style.display="block";
+    document.getElementById("startBtn").onclick=function(){state.introSeen=true;save();document.getElementById("introCard").style.display="none";render(true);};
+    if(state.introSeen){document.getElementById("introCard").style.display="none";}
+    bindSettings(); syncUI(); render(true);
+  })();
+}catch(e){console.error(e);showErr(e.message||String(e));}
+</script>
 </body>
 </html>
