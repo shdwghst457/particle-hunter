@@ -74,12 +74,16 @@
       <button id="nextBtn">Next</button>
       <button id="revealBtn">Reveal answer</button>
       <button id="resetBtn">Reset</button>
+      <button id="showBreakdownBtn" disabled>Show breakdown</button>
       <button id="toggleParticlesBtn">Show particle list</button>
       <button id="toggleMyNotesBtn">Show my notes</button>
     </div>
 
     <div class="stats" id="stats"></div>
-    <div id="breakdownBox" class="debug" style="display:none;margin-top:.5rem;"></div>
+    <div id="breakdownBox" class="card" style="display:none;margin-top:.75rem;padding:1rem;background:#f9fafb;">
+      <strong>Sentence Breakdown</strong>
+      <div id="breakdownContent" style="margin-top:.5rem;font-family:ui-monospace,monospace;"></div>
+    </div>
 
     <div class="notes" id="notesBlock" style="display:none;">
       <h4>Notes</h4><ul id="notesList"></ul>
@@ -101,25 +105,12 @@
 
   <div class="card" id="settingsCard">
     <strong>Settings</strong>
-    <div class="muted">Hard Mode splits non-particles into characters; multi-character particles stay grouped. Stacked notes are always on.</div>
+    <div class="muted">Progress through 4 levels by getting 5 perfect rounds. Level 1-2: grouped tokens. Level 3-4: character-level.</div>
     <div style="display:grid;gap:.4rem;margin-top:.5rem;">
-      <label><input type="checkbox" id="hardMode"> Hard mode</label>
       <label><input type="checkbox" id="hoverHints"> Enable hover highlights</label>
       <label><input type="checkbox" id="strictMode"> Strict mode (disable Reveal)</label>
-      <label><input type="checkbox" id="trapMode"> Trap mode (extra distractors)</label>
       <label><input type="checkbox" id="showCounts" checked> Show particle count in debug</label>
       <label><input type="checkbox" id="persistNotes"> Keep stacked gloss notes (session)</label>
-      <label><input type="checkbox" id="autoProgress" checked> Auto-progress (streak-based)</label>
-      <label><input type="checkbox" id="betaGloss"> Beta: Particle gloss + sentence meaning</label>
-      <label><input type="checkbox" id="betaSkeleton"> Beta: Skeleton view</label>
-      <label><input type="checkbox" id="betaTrain"> Beta: Train-car breakdown</label>
-      <label><input type="checkbox" id="tatoebaStream"> Stream: Tatoeba (hybrid)</label>
-      <label>Batch size
-        <select id="tatoebaBatch"><option>10</option><option selected>25</option><option>50</option></select>
-      </label>
-      <label>Max JP length
-        <select id="tatoebaMaxLen"><option>16</option><option selected>24</option><option>36</option><option>60</option></select>
-      </label>
     </div>
   </div>
 
@@ -169,11 +160,81 @@ var TRAPS=[
   {text:"その映画は面白い。",exceptions:[{start:0,end:2}]}
 ];
 
+// Extended sentence banks by level
+var LEVEL1_EXT=[
+  {text:"犬が走る。"},{text:"雨が降る。"},{text:"花を見る。"},{text:"水を飲む。"},
+  {text:"友達に会う。"},{text:"学校へ行く。"},{text:"本が好きだ。"},{text:"車で来た。"},
+  {text:"母と買い物する。"},{text:"兄も来る。"},{text:"妹の鞄だ。"},{text:"家から出る。"},
+  {text:"駅まで歩く。"},{text:"音楽を聞く。"},{text:"部屋が暗い。"},{text:"朝ご飯を食べる。"},
+  {text:"先生が教える。"},{text:"絵を描く。"},{text:"窓を開ける。"},{text:"友達と遊ぶ。"}
+];
+var LEVEL2_EXT=[
+  {text:"母が料理を作っている。"},{text:"兄は毎日走っている。"},{text:"妹も宿題をする。"},
+  {text:"犬が公園で遊んでいる。"},{text:"私は本を図書館で借りた。"},{text:"友達と映画館へ行った。"},
+  {text:"父が会社から帰ってきた。"},{text:"彼女は日本語が上手だ。"},{text:"昨日も雨が降った。"},
+  {text:"猫が魚を食べている。"},{text:"弟は学校が嫌いだ。"},{text:"姉が手紙を書いた。"},
+  {text:"彼は東京から来た。"},{text:"私も歌が好きだ。"},{text:"先生が本を読んでいる。"},
+  {text:"母が買い物に行った。"},{text:"兄が車を運転する。"},{text:"友達の家へ行く。"},
+  {text:"毎日公園を散歩する。"},{text:"駅から走って来た。"}
+];
+var LEVEL3_EXT=[
+  {text:"彼は毎朝七時に起きて、会社へ行く。"},{text:"私の母は料理が上手で、毎日美味しいものを作る。"},
+  {text:"友達が図書館で勉強している時、私は家で寝ていた。"},{text:"兄は東京の大学で経済を勉強している。"},
+  {text:"昨日駅前で友達に会って、一緒に映画を見た。"},{text:"彼女は日本語と英語が話せる。"},
+  {text:"父が会社から帰ってきたら、夕飯を食べる。"},{text:"妹は毎日ピアノを練習しているが、まだ上手ではない。"},
+  {text:"公園で犬と遊んでいる子供たちを見た。"},{text:"明日は友達の家でパーティーがある。"},
+  {text:"私は朝ご飯にパンと牛乳を食べた。"},{text:"彼は本を読むのが好きで、毎週図書館に行く。"},
+  {text:"母が買い物から帰ってきて、料理を始めた。"},{text:"兄が新しい車を買ったので、私も乗せてもらった。"},
+  {text:"駅まで歩いて行くより、バスで行く方が早い。"}
+];
+var LEVEL4_EXT=[
+  {text:"私の父は毎朝六時に起きて、会社に行く前にジョギングをしている。"},
+  {text:"友達が東京から大阪まで新幹線で行った時、私も一緒に行きたかったが、仕事があって行けなかった。"},
+  {text:"彼女は日本語の勉強を始めてから三年になるが、まだ漢字を読むのが難しいと言っている。"},
+  {text:"昨日図書館で本を借りようと思ったが、読みたい本が全部貸し出されていたので、諦めて帰った。"},
+  {text:"母が料理を作っている間に、私は部屋を掃除して、父は庭で花に水をやっていた。"},
+  {text:"兄は大学を卒業してから東京の会社で働いているが、毎週末は実家に帰ってくる。"},
+  {text:"彼は日本語が上手に話せるだけではなく、中国語も韓国語も勉強している。"},
+  {text:"明日友達と映画を見に行く予定だったが、雨が降りそうなので、家でゲームをすることにした。"},
+  {text:"私は朝ご飯を食べてから学校に行くが、弟は食べないで行くので、母がいつも心配している。"},
+  {text:"彼女が駅で待っていると言ったので、私は急いで行ったが、彼女はもう帰ってしまっていた。"}
+];
+
 var MULTI=["から","まで","より","って","しか","など"];
 var SINGLE=["は","が","を","に","へ","で","と","も","や","の"];
 var ALL=[].concat(MULTI,SINGLE);
 
-var GLOSS={"は":"topic / lens","が":"identifier / subject","を":"direct object","に":"target / time / existence","へ":"direction (towards)","で":"place of action / means","と":"and / with / quotative","も":"also / even","や":"non-exhaustive ‘and’","の":"possessive / attributive","から":"from / since","まで":"until / as far as","より":"than (comparison)","しか":"only (…ない)","って":"informal quotative/topic","など":"such as / etc."};
+var GLOSS={"は":"topic / lens","が":"identifier / subject","を":"direct object","に":"target / time / existence","へ":"direction (towards)","で":"place of action / means","と":"and / with / quotative","も":"also / even","や":"non-exhaustive 'and'","の":"possessive / attributive","から":"from / since","まで":"until / as far as","より":"than (comparison)","しか":"only (…ない)","って":"informal quotative/topic","など":"such as / etc."};
+
+// Comprehensive vocabulary dictionary
+var VOCAB={
+  "私":"I/me","犬":"dog","雨":"rain","花":"flower","水":"water","友達":"friend","学校":"school","本":"book","車":"car",
+  "母":"mother","兄":"older brother","妹":"younger sister","家":"home/house","駅":"station","音楽":"music","部屋":"room",
+  "朝ご飯":"breakfast","先生":"teacher","絵":"picture","窓":"window","料理":"cooking/dish","毎日":"every day",
+  "宿題":"homework","公園":"park","図書館":"library","映画館":"movie theater","父":"father","彼女":"she/her",
+  "日本語":"Japanese language","昨日":"yesterday","猫":"cat","魚":"fish","弟":"younger brother","姉":"older sister",
+  "手紙":"letter","彼":"he/him","東京":"Tokyo","歌":"song","買い物":"shopping","運転":"driving","散歩":"walk",
+  "毎朝":"every morning","七時":"7 o'clock","大学":"university","経済":"economics","駅前":"in front of station",
+  "一緒":"together","英語":"English language","夕飯":"dinner","ピアノ":"piano","練習":"practice","パーティー":"party",
+  "パン":"bread","牛乳":"milk","毎週":"every week","新幹線":"bullet train","大阪":"Osaka","三年":"3 years","漢字":"kanji",
+  "仕事":"work/job","全部":"all/everything","実家":"family home","毎週末":"every weekend","中国語":"Chinese language",
+  "韓国語":"Korean language","予定":"plan/schedule","ゲーム":"game","六時":"6 o'clock","ジョギング":"jogging",
+  "掃除":"cleaning","庭":"garden/yard","卒業":"graduation","会社":"company","時":"when/time",
+  "間":"while/between","前":"before","だけ":"only","ので":"because","ため":"for/in order to",
+
+  "走る":"run","降る":"fall(rain)","見る":"see/watch","飲む":"drink","会う":"meet","行く":"go","好き":"like",
+  "来る":"come","する":"do","出る":"go out/exit","歩く":"walk","聞く":"listen/hear","暗い":"dark","食べる":"eat",
+  "教える":"teach","描く":"draw","開ける":"open","遊ぶ":"play","作る":"make","借りる":"borrow","帰る":"return home",
+  "上手":"skilled/good at","嫌い":"dislike","書く":"write","読む":"read","寝る":"sleep","勉強":"study",
+  "話す":"speak","始める":"begin","起きる":"wake up/get up","買う":"buy","言う":"say","思う":"think",
+  "待つ":"wait","心配":"worry","難しい":"difficult","美味しい":"delicious","早い":"early/fast",
+  "新しい":"new","乗る":"ride/board",
+
+  "です":"is/are","だ":"is/are","ている":"doing(continuous)","てきた":"came after doing","た":"did(past)",
+  "ない":"not","が":"but","ので":"so/because","時":"when","ら":"if/when","て":"and(connector)",
+  "この":"this","その":"that","あの":"that over there","どの":"which","まだ":"still/not yet","もう":"already",
+  "いつも":"always","とても":"very","ちょっと":"a little","たくさん":"many/a lot","少し":"a little"
+};
 
 var DEMO_EXCEPTIONS=["この","その","あの","どの","こんな","そんな","あんな","どんな"];
 var SEQ_EXCEPTIONS=["です","でした"];
@@ -193,18 +254,14 @@ var MEANINGS={
 };
 
 /* ===== Persistence & state ===== */
-var KEY="phSettingsV0726";
+var KEY="phSettingsV0728";
 var state={
-  idx:0,hard:false,hover:false,strict:false,trap:false,showCounts:true,
-  cargoShown:false,perGlossSeen:{},rounds:[],level2Ready:false,levelBannerDismissed:false,
-  persistNotes:false,glossLog:[],autoProgress:true,introSeen:false,myNotesOpen:false,debugMode:true,
+  idx:0,hover:false,strict:false,showCounts:true,
+  cargoShown:false,perGlossSeen:{},persistNotes:false,glossLog:[],
+  introSeen:false,myNotesOpen:false,debugMode:true,
 
-  // Hybrid stream
-  tatoebaStream:false,tatoebaBatch:25,tatoebaMaxLen:24,tatoebaCache:[],tatoebaLastAt:0,
-  tatoebaStatus:"unknown",tatoebaLastErr:"",
-
-  // Beta toggles
-  betaGloss:false,betaSkeleton:false,betaTrain:false,
+  // Progression system
+  level:1,perfectStreak:0,
 
   _storageDisabled:false
 };
@@ -212,66 +269,13 @@ function save(){if(state._storageDisabled)return;try{localStorage.setItem(KEY,JS
 function load(){try{var s=localStorage.getItem(KEY);if(s)Object.assign(state,JSON.parse(s));}catch(e){}}
 function factoryReset(){if(!confirm("Factory Reset?"))return;try{localStorage.removeItem(KEY);}catch(e){}location.reload();}
 
-/* ===== Stream connectivity helpers ===== */
-function showStreamBanner(msg){
-  var el=document.getElementById("streamBanner");
-  if(!el)return;
-  el.innerHTML="<strong>Live stream unavailable.</strong> "+(msg||"Use a local server (not file://) or check your connection.");
-  el.style.display="block";
-}
-function hideStreamBanner(){
-  var el=document.getElementById("streamBanner"); if(el) el.style.display="none";
-}
-async function testTatoebaConnectivity(timeoutMs){
-  if(location.protocol==="file:"){
-    state.tatoebaStatus="blocked";
-    state.tatoebaLastErr="Blocked on file:// — run a local server (e.g., python3 -m http.server)."; save(); return false;
-  }
-  if(navigator && navigator.onLine===false){
-    state.tatoebaStatus="offline"; state.tatoebaLastErr="Offline"; save(); return false;
-  }
-  var ctrl=new AbortController(); var to=setTimeout(function(){ctrl.abort();},timeoutMs||3000);
-  try{
-    var probe="https://tatoeba.org/en/api_v0/search?from=jpn&sort=random&page=1";
-    var res=await fetch(probe,{mode:"cors",signal:ctrl.signal});
-    clearTimeout(to);
-    if(!res.ok){ state.tatoebaStatus=(navigator.onLine===false)?"offline":"blocked"; state.tatoebaLastErr="HTTP "+res.status; save(); return false; }
-    state.tatoebaStatus="ok"; state.tatoebaLastErr=""; save(); return true;
-  }catch(e){
-    clearTimeout(to);
-    state.tatoebaStatus=(navigator.onLine===false)?"offline":"blocked";
-    state.tatoebaLastErr=(e&&e.message)?e.message:"Fetch failed"; save(); return false;
-  }
-}
-
 /* ===== Bind settings (sticky) ===== */
 function bindSettings(){
-  ["hardMode","hoverHints","strictMode","trapMode","showCounts","persistNotes","autoProgress",
-   "betaGloss","betaSkeleton","betaTrain","tatoebaStream"].forEach(function(id){
+  ["hoverHints","strictMode","showCounts","persistNotes"].forEach(function(id){
     var el=document.getElementById(id); if(!el)return;
-    if(id==="tatoebaStream"){
-      el.addEventListener("change",async function(e){
-        state.tatoebaStream=!!e.target.checked; save();
-        if(state.tatoebaStream){
-          hideStreamBanner();
-          var ok=await testTatoebaConnectivity(3000);
-          if(!ok){ showStreamBanner(state.tatoebaLastErr); state.tatoebaStream=false; save(); syncUI(); }
-          else{ refillTatoebaIfNeeded(); }
-        }else{ hideStreamBanner(); }
-      });
-    }else{
-      el.addEventListener("change",function(e){
-        state[id]=!!e.target.checked; save();
-        if(id==="trapMode"){ state.idx=0; }
-        if(id==="hardMode"){ render(true);} else { syncUI(); }
-      });
-    }
-  });
-  document.getElementById("tatoebaBatch").addEventListener("change",function(e){
-    state.tatoebaBatch=parseInt(e.target.value,10)||25; save();
-  });
-  document.getElementById("tatoebaMaxLen").addEventListener("change",function(e){
-    state.tatoebaMaxLen=parseInt(e.target.value,10)||24; save();
+    el.addEventListener("change",function(e){
+      state[id]=!!e.target.checked; save(); syncUI();
+    });
   });
 }
 
@@ -333,92 +337,12 @@ function annotate(sentence,hardMode,exceptions){
   return tokens;
 }
 
-/* ===== Train-car breakdown ===== */
-var JP=/[一-龯ぁ-んァ-ンー]/;
-var EN_NOUN={"昼ご飯":"lunch","カレー":"curry","駅":"station","家":"house","本":"book","図書館":"library","猫":"cat","庭":"yard","公園":"park","子供":"children","日本語":"Japanese","会社":"company","太郎":"Tarō","明日":"tomorrow","学校":"school","週末":"weekend"};
-var ROLE={"に":"target","を":"object","で":"place/means","へ":"direction","が":"subject","は":"topic","の":"of/’s","から":"from","まで":"to","より":"than","しか":"only","って":"quot./topic","など":"etc."};
-var EN_VERB={"食べた":"ate","走った":"ran","見た":"saw/watched","行った":"went","行く":"go","来た":"came","来る":"come","遊ぶ":"play","借りた":"borrowed","勉強している":"am studying","あげた":"gave","いる":"is/are","ある":"there is/are","引っ越した":"moved"};
-function carGlueLines(tokens){
-  var lines=[];
-  // host + particle
-  for(var i=0;i<tokens.length;i++){
-    var t=tokens[i]; if(!t.isParticle)continue;
-    var hostParts=[],j=i-1;
-    while(j>=0 && !tokens[j].isParticle && JP.test(tokens[j].text)){hostParts.unshift(tokens[j].text);break;}
-    var hostJP=(hostParts.join("")||"…").replace(/\s+/g,"");
-    var hostEN=EN_NOUN[hostJP]||hostJP;
-    var role=ROLE[t.text]||"particle";
-    lines.push(hostJP+" "+t.text+" — "+hostEN+" ("+role+")");
-  }
-  // final verb/predicate (robust)
-  (function(){
-    if(!tokens.length)return;
-    var k=tokens.length-1;
-    while(k>=0 && !tokens[k].isParticle && /[。！？!?]/.test(tokens[k].text)){k--;}
-    var tail=[];
-    while(k>=0 && !tokens[k].isParticle && JP.test(tokens[k].text)){
-      tail.unshift(tokens[k].text);
-      if(k-1>=0 && tokens[k-1].isParticle)break;
-      k--;
-    }
-    if(!tail.length)return;
-    var core=tail.join(""); var clean=core.replace(/[。！？!?]+$/,"");
-    var en=EN_VERB[clean]||"verb";
-    var endPunct=/[。！？!?]$/.test(tokens[tokens.length-1].text)?"。":"";
-    lines.push(clean+endPunct+" — "+en);
-  })();
-  return lines;
-}
-
-/* ===== Hybrid stream (Tatoeba) ===== */
-var PARTICLES=[].concat(MULTI,SINGLE);
-function hasParticles(s){for(var i=0;i<PARTICLES.length;i++){if(s.indexOf(PARTICLES[i])>-1)return true;}return false;}
-function buildSeenSet(){
-  var seen=Object.create(null);
-  for(var i=0;i<CORE.length;i++)seen[CORE[i].text]=1;
-  if(Array.isArray(state.tatoebaCache))for(var j=0;j<state.tatoebaCache.length;j++)seen[state.tatoebaCache[j].text]=1;
-  return seen;
-}
-function parseTatoeba(json,maxLen){
-  var out=[]; if(!json||!json.results)return out;
-  for(var i=0;i<json.results.length;i++){
-    var r=json.results[i], jp=(r.text||r.sentence||"").trim(), lang=r.lang||r.language||r.from||"";
-    if(lang!=="jpn"||!jp)continue;
-    if(maxLen && jp.replace(/\s+/g,"").length>maxLen)continue;
-    if(!hasParticles(jp))continue;
-    var en=""; if(r.translations&&r.translations.length){
-      for(var t=0;t<r.translations.length;t++){var tr=r.translations[t]; if((tr.lang||tr.language)==="eng"&&tr.text){en=tr.text.trim();break;}}
-    }
-    if(jp.charAt(jp.length-1)!=="。")jp+="。";
-    out.push({text:jp,meaning:en});
-  } return out;
-}
-function tatoebaUrl(page){var p=page||1;return "https://tatoeba.org/en/api_v0/search?from=jpn&sort=random&trans_filter=limit&orphans=no&has_audio=no&page="+p;}
-async function refillTatoebaIfNeeded(){
-  if(!state.tatoebaStream)return;
-  if(!Array.isArray(state.tatoebaCache))state.tatoebaCache=[];
-  if(state.tatoebaCache.length>=state.tatoebaBatch)return;
-  var now=Date.now(); if(now-(state.tatoebaLastAt||0)<2000)return;
-  try{
-    var want=state.tatoebaBatch,maxLen=state.tatoebaMaxLen||24,seen=buildSeenSet(),added=0,tries=0;
-    while(added<want && tries<6){
-      tries++; var page=1+Math.floor(Math.random()*20);
-      var res=await fetch(tatoebaUrl(page),{mode:"cors"}); if(!res.ok)break;
-      var items=parseTatoeba(await res.json(),maxLen);
-      for(var i=0;i<items.length && added<want;i++){
-        var it=items[i]; if(seen[it.text])continue; seen[it.text]=1;
-        state.tatoebaCache.push(it);
-        if(it.meaning && !MEANINGS[it.text])MEANINGS[it.text]=it.meaning;
-        added++;
-      }
-    }
-    state.tatoebaLastAt=Date.now(); save();
-  }catch(e){/* silent: offline/CORS */}
-}
-
 /* ===== UI state ===== */
 var tokens=[],picked=new Set();
-function updatePill(){document.getElementById("modePill").textContent=state.trap?"Brutal (Trap)":"Core";}
+function updatePill(){
+  var names=["","Beginner","Intermediate","Advanced","Expert"];
+  document.getElementById("modePill").textContent="Level "+state.level+": "+names[state.level];
+}
 function renderNotes(items){
   var block=document.getElementById("notesBlock"),list=document.getElementById("notesList");
   list.innerHTML=""; if(!items.length){block.style.display="none";return;}
@@ -432,19 +356,10 @@ function clearAccPills(){var pills=document.querySelectorAll("#stats .pill");for
 function syncUI(){
   document.body.classList.toggle("noHover",!state.hover);
   document.getElementById("revealBtn").disabled=state.strict;
-  document.getElementById("hardMode").checked=!!state.hard;
   document.getElementById("hoverHints").checked=!!state.hover;
   document.getElementById("strictMode").checked=!!state.strict;
-  document.getElementById("trapMode").checked=!!state.trap;
   document.getElementById("showCounts").checked=!!state.showCounts;
   document.getElementById("persistNotes").checked=!!state.persistNotes;
-  document.getElementById("autoProgress").checked=!!state.autoProgress;
-  document.getElementById("betaGloss").checked=!!state.betaGloss;
-  document.getElementById("betaSkeleton").checked=!!state.betaSkeleton;
-  document.getElementById("betaTrain").checked=!!state.betaTrain;
-  document.getElementById("tatoebaStream").checked=!!state.tatoebaStream;
-  document.getElementById("tatoebaBatch").value=String(state.tatoebaBatch||25);
-  document.getElementById("tatoebaMaxLen").value=String(state.tatoebaMaxLen||24);
 
   updatePill();
   document.getElementById("debugCard").style.display="block";
@@ -457,22 +372,23 @@ function syncUI(){
   var dbg=document.getElementById("debugArea");
   if(state.showCounts){
     var count=tokens.filter(function(t){return t.isParticle;}).length;
-    dbg.textContent="v0.7.26 | Particles: "+count;
-  }else{dbg.textContent="v0.7.26";}
-  // stream status note
-  var st=state.tatoebaStatus||"unknown"; var note=" | Stream: "+st+(state.tatoebaLastErr?(" ("+state.tatoebaLastErr+")"):"");
-  dbg.textContent+=note;
+    dbg.textContent="v0.7.28 | Level "+state.level+" | Particles: "+count+" | Streak: "+state.perfectStreak+"/5";
+  }else{dbg.textContent="v0.7.28 | Level "+state.level;}
 }
 
 /* ===== Bank ===== */
 function currentBank(){
-  var base=CORE.slice();
-  if(state.tatoebaStream && Array.isArray(state.tatoebaCache) && state.tatoebaCache.length){
-    var stream=state.tatoebaCache.map(function(it){return {text:it.text};});
-    var out=[],i=0,j=0; while(i<base.length||j<stream.length){ if(i<base.length)out.push(base[i++]); if(j<stream.length)out.push(stream[j++]); }
-    base=out;
+  // Level-specific sentence banks
+  var base=[];
+  if(state.level===1){
+    base=CORE.concat(LEVEL1_EXT);
+  }else if(state.level===2){
+    base=CORE.concat(LEVEL1_EXT).concat(TRAPS).concat(LEVEL2_EXT);
+  }else if(state.level===3){
+    base=LEVEL3_EXT;
+  }else if(state.level===4){
+    base=LEVEL3_EXT.concat(TRAPS).concat(LEVEL4_EXT);
   }
-  if(state.trap) base=base.concat(TRAPS);
   return base;
 }
 
@@ -483,7 +399,9 @@ function render(force){
   var bank=currentBank(); if(!bank.length){document.getElementById("sentence").textContent="(no sentences)";return;}
   if(!force) state.idx=(state.idx+1)%bank.length;
   var item=bank[state.idx], sentence=item.text; state._lastSentence=sentence;
-  tokens=annotate(sentence,state.hard,exceptsFor(item)); picked.clear();
+  // Levels 3 & 4 use character-level splitting (hard mode)
+  var hardMode=state.level>=3;
+  tokens=annotate(sentence,hardMode,exceptsFor(item)); picked.clear();
   var c=document.getElementById("sentence"); c.innerHTML="";
   for(var i=0;i<tokens.length;i++){
     (function(i){
@@ -499,9 +417,9 @@ function render(force){
   }
   document.getElementById("checkBtn").disabled=false;
   document.getElementById("nextBtn").disabled=true;
+  document.getElementById("showBreakdownBtn").disabled=true;
   resetNextBtn(); document.getElementById("cargoBanner").classList.remove("show");
   syncUI();
-  if(state.tatoebaStream){ refillTatoebaIfNeeded(); }
 }
 function scoreRound(){
   var tp=0,fp=0,fn=0,spans=[].slice.call(document.querySelectorAll("#sentence .token")),newGlosses=[];
@@ -519,30 +437,21 @@ function scoreRound(){
   if(state.persistNotes){for(var g=0;g<newGlosses.length;g++){if(state.glossLog.indexOf(newGlosses[g])===-1)state.glossLog.push(newGlosses[g]);}renderNotes(state.glossLog);}else{renderNotes(newGlosses);}
   if(state.myNotesOpen)renderMyNotes();
 
-  // Beta breakdowns
-  var want=state.debugMode&&(state.betaGloss||state.betaSkeleton||state.betaTrain);
-  var box=document.getElementById("breakdownBox");
-  if(box){
-    if(!want){box.style.display="none";box.textContent="";}
-    else{
-      var sentence=state._lastSentence||""; var nat=MEANINGS[sentence]||"(meaning coming soon)"; var sections=[];
-      var uniq=[],order=MULTI.concat(SINGLE);
-      for(var i2=0;i2<tokens.length;i2++){var t2=tokens[i2]; if(t2.isParticle && uniq.indexOf(t2.text)===-1)uniq.push(t2.text);}
-      uniq.sort(function(a,b){return order.indexOf(a)-order.indexOf(b);});
-      if(state.betaGloss){
-        var glossLines=uniq.length?("• "+uniq.map(function(p){return p+" = "+(GLOSS[p]||"particle");}).join("\n• ")):"—";
-        sections.push("Particles in this sentence\n"+glossLines+"\n\nSentence meaning\n"+nat);
-      }
-      if(state.betaSkeleton){
-        var rows=[]; if(sentence.indexOf("まで")>-1){var seg=sentence.split("まで")[0];var piece=(seg.slice(-6)+"まで").replace(/.*?([一-龯ぁ-んァ-ンー]+まで)$/,'$1');rows.push(piece+" → endpoint “to/until …”");}
-        if(sentence.indexOf("に")>-1)rows.push("…に → time/target/existence");
-        if(sentence.indexOf("で")>-1)rows.push("…で → place of action / by means");
-        sections.push("Skeleton view\n"+(rows.length?("• "+rows.join("\n• ")):"—"));
-      }
-      if(state.betaTrain){ sections.push("Train-car breakdown\n"+"• "+carGlueLines(tokens).join("\n• ")); }
-      box.classList.add("bd"); box.style.display="block"; box.textContent=sections.join("\n\n");
+  // Progression: Track perfect rounds and level up silently
+  var isPerfect=fp===0&&fn===0;
+  if(isPerfect){
+    state.perfectStreak++;
+    if(state.perfectStreak>=5 && state.level<4){
+      state.level++;
+      state.perfectStreak=0;
+      state.idx=0; // Reset to first sentence of new level
     }
+  }else{
+    state.perfectStreak=0;
   }
+
+  // Enable breakdown button after checking
+  document.getElementById("showBreakdownBtn").disabled=false;
 
   var next=document.getElementById("nextBtn");
   document.getElementById("checkBtn").disabled=true; next.disabled=false; resetNextBtn();
@@ -559,6 +468,31 @@ function resetRound(){
   picked.clear(); var nodes=[].slice.call(document.querySelectorAll("#sentence .token"));
   for(var i=0;i<nodes.length;i++){nodes[i].classList.remove("picked","good","bad","miss");}
   document.getElementById("cargoBanner").classList.remove("show"); var bd=document.getElementById("breakdownBox"); if(bd)bd.style.display="none"; resetNextBtn();
+  document.getElementById("showBreakdownBtn").disabled=true;
+}
+function showBreakdown(){
+  // Umi-style token-by-token breakdown
+  var box=document.getElementById("breakdownBox");
+  var content=document.getElementById("breakdownContent");
+  if(box.style.display==="block"){
+    box.style.display="none";
+    return;
+  }
+  var lines=[];
+  for(var i=0;i<tokens.length;i++){
+    var t=tokens[i];
+    var meaning="";
+    if(t.isParticle){
+      meaning=GLOSS[t.text]||"particle";
+    }else if(VOCAB[t.text]){
+      meaning=VOCAB[t.text];
+    }else{
+      meaning="—";
+    }
+    lines.push('<div style="display:flex;border-bottom:1px solid #e5e7eb;padding:.4rem 0;"><div style="min-width:120px;font-weight:500;">'+t.text+'</div><div style="color:#6b7280;border-left:2px solid #d1d5db;padding-left:.75rem;">'+meaning+'</div></div>');
+  }
+  content.innerHTML=lines.join("");
+  box.style.display="block";
 }
 
 /* ===== Controls ===== */
@@ -566,6 +500,7 @@ document.getElementById("checkBtn").onclick=scoreRound;
 document.getElementById("nextBtn").onclick=function(){render(false);};
 document.getElementById("revealBtn").onclick=revealAnswer;
 document.getElementById("resetBtn").onclick=resetRound;
+document.getElementById("showBreakdownBtn").onclick=showBreakdown;
 document.getElementById("toggleParticlesBtn").onclick=function(){var card=document.getElementById("particleListCard");card.style.display=card.style.display==="none"?"block":"none";};
 document.getElementById("toggleMyNotesBtn").onclick=function(){state.myNotesOpen=!state.myNotesOpen;save();if(state.myNotesOpen)renderMyNotes();syncUI();};
 document.getElementById("factoryBtn").addEventListener("click",factoryReset);
