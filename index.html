@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Particle Hunter — v0.7.26 (Hybrid + Connectivity + Verb fix)</title>
+<title>Particle Hunter — v0.7.28 (4-Level Progression + Umi Breakdown)</title>
 <style>
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",Meiryo,sans-serif;background:#f7f7f9;margin:0;color:#222}
   header{background:#fff;border-bottom:1px solid #e5e7eb;padding:.75rem 1rem;position:sticky;top:0;z-index:10}
@@ -39,7 +39,7 @@
 <body class="noHover">
 <header>
   <div class="head">
-    <h1>Particle Hunter <span class="muted">v0.7.26</span> <span class="pill" id="modePill">Core</span></h1>
+    <h1>Particle Hunter <span class="muted">v0.7.28</span> <span class="pill" id="modePill">Core</span></h1>
     <button id="toggleDebugBtn">Debug Mode: <span id="debugState">ON</span></button>
   </div>
 </header>
@@ -505,7 +505,7 @@ document.getElementById("toggleParticlesBtn").onclick=function(){var card=docume
 document.getElementById("toggleMyNotesBtn").onclick=function(){state.myNotesOpen=!state.myNotesOpen;save();if(state.myNotesOpen)renderMyNotes();syncUI();};
 document.getElementById("factoryBtn").addEventListener("click",factoryReset);
 document.getElementById("copyDebugBtn").addEventListener("click",function(){
-  var payload={version:"v0.7.26",sentence:(currentBank()[state.idx]||{}).text,settings:state,tokens:tokens.map(function(t){return {t:t.text,p:t.isParticle};}),picked:Array.from(picked),glossLog:state.glossLog};
+  var payload={version:"v0.7.28",sentence:(currentBank()[state.idx]||{}).text,settings:state,tokens:tokens.map(function(t){return {t:t.text,p:t.isParticle};}),picked:Array.from(picked),glossLog:state.glossLog};
   var text=JSON.stringify(payload,null,2);
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){document.getElementById("debugArea").textContent="Copied debug snapshot:\n"+text;}).catch(function(){document.getElementById("debugArea").textContent="Copy failed. Here it is:\n"+text;});}
   else{document.getElementById("debugArea").textContent="Clipboard not available. Here it is:\n"+text;}
