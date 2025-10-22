@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Particle Hunter — v0.7.28 (4-Level Progression + Umi Breakdown)</title>
+<title>Particle Hunter — v0.7.29 (Auto-Submit + Timing-Based Progression)</title>
 <style>
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",Meiryo,sans-serif;background:#f7f7f9;margin:0;color:#222}
   header{background:#fff;border-bottom:1px solid #e5e7eb;padding:.75rem 1rem;position:sticky;top:0;z-index:10}
@@ -39,7 +39,7 @@
 <body class="noHover">
 <header>
   <div class="head">
-    <h1>Particle Hunter <span class="muted">v0.7.28</span> <span class="pill" id="modePill">Core</span></h1>
+    <h1>Particle Hunter <span class="muted">v0.7.29</span> <span class="pill" id="modePill">Core</span></h1>
     <button id="toggleDebugBtn">Debug Mode: <span id="debugState">ON</span></button>
   </div>
 </header>
@@ -59,8 +59,8 @@
 
   <div class="card" id="gameCard">
     <div class="row">
-      <div class="muted"><strong>Goal:</strong> Click all glue-words in the sentence, then press <strong>Check</strong>.</div>
-      <div class="pill"><span>Keys:</span> <strong>Space</strong> check/next · <strong>C</strong> check · <strong>N</strong> next</div>
+      <div class="muted"><strong>Goal:</strong> Click all particles as fast as you can! Auto-advances when complete.</div>
+      <div class="pill"><span>Keys:</span> <strong>Space</strong> or <strong>N</strong> next sentence</div>
     </div>
 
     <div id="cargoBanner" class="banner" role="alert"><strong>Hey, you left cargo on the platform!</strong></div>
@@ -70,10 +70,7 @@
     <div class="sentence" id="sentence"></div>
 
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;">
-      <button id="checkBtn" class="primary">Check</button>
       <button id="nextBtn">Next</button>
-      <button id="revealBtn">Reveal answer</button>
-      <button id="resetBtn">Reset</button>
       <button id="showBreakdownBtn" disabled>Show breakdown</button>
       <button id="toggleParticlesBtn">Show particle list</button>
       <button id="toggleMyNotesBtn">Show my notes</button>
@@ -105,11 +102,10 @@
 
   <div class="card" id="settingsCard">
     <strong>Settings</strong>
-    <div class="muted">Progress through 4 levels by getting 5 perfect rounds. Level 1-2: grouped tokens. Level 3-4: character-level.</div>
+    <div class="muted">Auto-advances on completion. Level up by improving speed (avg time/particle). Level 1-2: grouped. Level 3-4: character-split.</div>
     <div style="display:grid;gap:.4rem;margin-top:.5rem;">
       <label><input type="checkbox" id="hoverHints"> Enable hover highlights</label>
-      <label><input type="checkbox" id="strictMode"> Strict mode (disable Reveal)</label>
-      <label><input type="checkbox" id="showCounts" checked> Show particle count in debug</label>
+      <label><input type="checkbox" id="showCounts" checked> Show timing stats in debug</label>
       <label><input type="checkbox" id="persistNotes"> Keep stacked gloss notes (session)</label>
     </div>
   </div>
@@ -254,14 +250,18 @@ var MEANINGS={
 };
 
 /* ===== Persistence & state ===== */
-var KEY="phSettingsV0728";
+var KEY="phSettingsV0729";
 var state={
-  idx:0,hover:false,strict:false,showCounts:true,
+  idx:0,hover:false,showCounts:true,
   cargoShown:false,perGlossSeen:{},persistNotes:false,glossLog:[],
   introSeen:false,myNotesOpen:false,debugMode:true,
 
-  // Progression system
-  level:1,perfectStreak:0,
+  // Timing-based progression system
+  level:1,
+  startTime:0,
+  timePenalty:0,
+  recentTimes:[],    // Rolling window of last 12 sentence times
+  recentMistakes:[], // Rolling window of last 12 mistake counts
 
   _storageDisabled:false
 };
@@ -271,7 +271,7 @@ function factoryReset(){if(!confirm("Factory Reset?"))return;try{localStorage.re
 
 /* ===== Bind settings (sticky) ===== */
 function bindSettings(){
-  ["hoverHints","strictMode","showCounts","persistNotes"].forEach(function(id){
+  ["hoverHints","showCounts","persistNotes"].forEach(function(id){
     var el=document.getElementById(id); if(!el)return;
     el.addEventListener("change",function(e){
       state[id]=!!e.target.checked; save(); syncUI();
@@ -338,7 +338,7 @@ function annotate(sentence,hardMode,exceptions){
 }
 
 /* ===== UI state ===== */
-var tokens=[],picked=new Set();
+var tokens=[],picked=new Set(),currentMistakes=0;
 function updatePill(){
   var names=["","Beginner","Intermediate","Advanced","Expert"];
   document.getElementById("modePill").textContent="Level "+state.level+": "+names[state.level];
@@ -355,9 +355,7 @@ function resetNextBtn(){var n=document.getElementById("nextBtn");n.classList.rem
 function clearAccPills(){var pills=document.querySelectorAll("#stats .pill");for(var i=0;i<pills.length;i++){var txt=(pills[i].textContent||"").trim();if(txt.indexOf("Acc ")===0)pills[i].remove();}}
 function syncUI(){
   document.body.classList.toggle("noHover",!state.hover);
-  document.getElementById("revealBtn").disabled=state.strict;
   document.getElementById("hoverHints").checked=!!state.hover;
-  document.getElementById("strictMode").checked=!!state.strict;
   document.getElementById("showCounts").checked=!!state.showCounts;
   document.getElementById("persistNotes").checked=!!state.persistNotes;
 
@@ -372,8 +370,9 @@ function syncUI(){
   var dbg=document.getElementById("debugArea");
   if(state.showCounts){
     var count=tokens.filter(function(t){return t.isParticle;}).length;
-    dbg.textContent="v0.7.28 | Level "+state.level+" | Particles: "+count+" | Streak: "+state.perfectStreak+"/5";
-  }else{dbg.textContent="v0.7.28 | Level "+state.level;}
+    var avgTime=state.recentTimes.length>0?(state.recentTimes.reduce(function(a,b){return a+b;},0)/state.recentTimes.length).toFixed(2):"--";
+    dbg.textContent="v0.7.29 | Level "+state.level+" | Particles: "+count+" | Avg: "+avgTime+"s/p | History: "+state.recentTimes.length+"/12";
+  }else{dbg.textContent="v0.7.29 | Level "+state.level;}
 }
 
 /* ===== Bank ===== */
@@ -402,6 +401,12 @@ function render(force){
   // Levels 3 & 4 use character-level splitting (hard mode)
   var hardMode=state.level>=3;
   tokens=annotate(sentence,hardMode,exceptsFor(item)); picked.clear();
+
+  // Start timer and reset penalty
+  state.startTime=Date.now();
+  state.timePenalty=0;
+  currentMistakes=0;
+
   var c=document.getElementById("sentence"); c.innerHTML="";
   for(var i=0;i<tokens.length;i++){
     (function(i){
@@ -409,66 +414,112 @@ function render(force){
       sp.className="token"; sp.textContent=t.text;
       sp.addEventListener("pointerdown",function(){
         if(sp.classList.contains("good")||sp.classList.contains("bad")||sp.classList.contains("miss"))return;
-        if(picked.has(i)){picked.delete(i);sp.classList.remove("picked");}
-        else{picked.add(i);sp.classList.add("picked");}
+
+        if(picked.has(i)){
+          picked.delete(i);
+          sp.classList.remove("picked");
+        }else{
+          picked.add(i);
+          sp.classList.add("picked");
+
+          // Wrong click penalty: +2s and red flash
+          if(!t.isParticle){
+            currentMistakes++;
+            state.timePenalty+=2000; // 2 seconds in ms
+            sp.classList.add("bad");
+            setTimeout(function(){sp.classList.remove("bad","picked");},300);
+            picked.delete(i);
+            return;
+          }
+
+          // Check if all particles found → auto-submit
+          checkCompletion();
+        }
       });
       c.appendChild(sp);
     })(i);
   }
-  document.getElementById("checkBtn").disabled=false;
   document.getElementById("nextBtn").disabled=true;
   document.getElementById("showBreakdownBtn").disabled=true;
   resetNextBtn(); document.getElementById("cargoBanner").classList.remove("show");
   syncUI();
 }
-function scoreRound(){
-  var tp=0,fp=0,fn=0,spans=[].slice.call(document.querySelectorAll("#sentence .token")),newGlosses=[];
-  function addGloss(key){ if(ALL.indexOf(key)>-1 && !state.perGlossSeen[key]){ var gloss=GLOSS[key]||"particle"; var line=key+" = "+gloss; newGlosses.push(line); state.perGlossSeen[key]=true; } }
+function checkCompletion(){
+  // Count total particles and picked particles
+  var totalParticles=tokens.filter(function(t){return t.isParticle;}).length;
+  var pickedParticles=0;
   for(var i=0;i<tokens.length;i++){
-    var t=tokens[i],p=picked.has(i);
-    if(t.isParticle && p){tp++;spans[i].classList.add("good");addGloss(t.text);}
-    else if(!t.isParticle && p){fp++;spans[i].classList.add("bad");}
-    else if(t.isParticle && !p){fn++;spans[i].classList.add("miss");addGloss(t.text);}
+    if(tokens[i].isParticle && picked.has(i))pickedParticles++;
   }
-  var trueP=tokens.filter(function(t){return t.isParticle;}).length;
-  var acc=trueP===0?(picked.size===0?100:0):(tp/(tp+fp+fn||1))*100;
-  var accP=document.createElement("span");accP.className="pill";accP.textContent="Acc "+acc.toFixed(1)+"%";document.getElementById("stats").appendChild(accP);
-  if(fn>0 && !state.cargoShown){document.getElementById("cargoBanner").classList.add("show");state.cargoShown=true;}
+
+  // Auto-submit when all particles found
+  if(pickedParticles===totalParticles){
+    setTimeout(function(){completeRound();},150); // Slight delay for visual feedback
+  }
+}
+function completeRound(){
+  var mistakes=currentMistakes;
+  // Calculate time taken (with penalties)
+  var elapsed=Date.now()-state.startTime+state.timePenalty;
+  var particleCount=tokens.filter(function(t){return t.isParticle;}).length;
+  var timePerParticle=particleCount>0?(elapsed/particleCount)/1000:0; // Convert to seconds
+
+  // Visual feedback
+  var spans=[].slice.call(document.querySelectorAll("#sentence .token")),newGlosses=[];
+  function addGloss(key){if(ALL.indexOf(key)>-1 && !state.perGlossSeen[key]){var gloss=GLOSS[key]||"particle";var line=key+" = "+gloss;newGlosses.push(line);state.perGlossSeen[key]=true;}}
+  for(var i=0;i<tokens.length;i++){
+    if(tokens[i].isParticle){
+      spans[i].classList.add("good");
+      addGloss(tokens[i].text);
+    }
+  }
+
+  // Rolling window tracking
+  state.recentTimes.push(timePerParticle);
+  state.recentMistakes.push(mistakes);
+  if(state.recentTimes.length>12){state.recentTimes.shift();state.recentMistakes.shift();}
+
+  // Show timing feedback
+  var timePill=document.createElement("span");
+  timePill.className="pill";
+  timePill.textContent=timePerParticle.toFixed(2)+"s per particle";
+  document.getElementById("stats").appendChild(timePill);
+
+  // Evaluate and adjust difficulty
+  evaluatePerformance();
+
+  // Notes and UI
   if(state.persistNotes){for(var g=0;g<newGlosses.length;g++){if(state.glossLog.indexOf(newGlosses[g])===-1)state.glossLog.push(newGlosses[g]);}renderNotes(state.glossLog);}else{renderNotes(newGlosses);}
   if(state.myNotesOpen)renderMyNotes();
 
-  // Progression: Track perfect rounds and level up silently
-  var isPerfect=fp===0&&fn===0;
-  if(isPerfect){
-    state.perfectStreak++;
-    if(state.perfectStreak>=5 && state.level<4){
-      state.level++;
-      state.perfectStreak=0;
-      state.idx=0; // Reset to first sentence of new level
-    }
-  }else{
-    state.perfectStreak=0;
-  }
-
-  // Enable breakdown button after checking
+  // Enable breakdown and next
   document.getElementById("showBreakdownBtn").disabled=false;
+  document.getElementById("nextBtn").disabled=false;
 
-  var next=document.getElementById("nextBtn");
-  document.getElementById("checkBtn").disabled=true; next.disabled=false; resetNextBtn();
-  if(fp===0 && fn===0){next.classList.add("next-success");}else{next.classList.add("next-warn");}
   save(); syncUI();
 }
-function revealAnswer(){
-  var spans=[].slice.call(document.querySelectorAll("#sentence .token"));
-  for(var i=0;i<tokens.length;i++){if(tokens[i].isParticle)spans[i].classList.add("miss");}
-  document.getElementById("checkBtn").disabled=true; var next=document.getElementById("nextBtn");
-  next.disabled=false; resetNextBtn(); next.classList.add("next-warn");
-}
-function resetRound(){
-  picked.clear(); var nodes=[].slice.call(document.querySelectorAll("#sentence .token"));
-  for(var i=0;i<nodes.length;i++){nodes[i].classList.remove("picked","good","bad","miss");}
-  document.getElementById("cargoBanner").classList.remove("show"); var bd=document.getElementById("breakdownBox"); if(bd)bd.style.display="none"; resetNextBtn();
-  document.getElementById("showBreakdownBtn").disabled=true;
+function evaluatePerformance(){
+  // Need at least 8 rounds for evaluation
+  if(state.recentTimes.length<8)return;
+
+  var avgTime=state.recentTimes.reduce(function(a,b){return a+b;},0)/state.recentTimes.length;
+  var totalMistakes=state.recentMistakes.reduce(function(a,b){return a+b;},0);
+
+  // Level up thresholds (avg time per particle)
+  var thresholds=[999,3.0,2.0,1.5,1.0]; // index 0 unused, 1-4 are levels
+
+  // Try to level up
+  if(state.level<4 && avgTime<thresholds[state.level+1]){
+    state.level++;
+    state.idx=0; // Reset to first sentence
+  }
+  // Level down on too many mistakes
+  else if(state.level>1 && totalMistakes>=4){
+    state.level--;
+    state.idx=0;
+    // Clear mistake history after regression
+    state.recentMistakes=state.recentMistakes.map(function(){return 0;});
+  }
 }
 function showBreakdown(){
   // Umi-style token-by-token breakdown
@@ -496,16 +547,13 @@ function showBreakdown(){
 }
 
 /* ===== Controls ===== */
-document.getElementById("checkBtn").onclick=scoreRound;
 document.getElementById("nextBtn").onclick=function(){render(false);};
-document.getElementById("revealBtn").onclick=revealAnswer;
-document.getElementById("resetBtn").onclick=resetRound;
 document.getElementById("showBreakdownBtn").onclick=showBreakdown;
 document.getElementById("toggleParticlesBtn").onclick=function(){var card=document.getElementById("particleListCard");card.style.display=card.style.display==="none"?"block":"none";};
 document.getElementById("toggleMyNotesBtn").onclick=function(){state.myNotesOpen=!state.myNotesOpen;save();if(state.myNotesOpen)renderMyNotes();syncUI();};
 document.getElementById("factoryBtn").addEventListener("click",factoryReset);
 document.getElementById("copyDebugBtn").addEventListener("click",function(){
-  var payload={version:"v0.7.28",sentence:(currentBank()[state.idx]||{}).text,settings:state,tokens:tokens.map(function(t){return {t:t.text,p:t.isParticle};}),picked:Array.from(picked),glossLog:state.glossLog};
+  var payload={version:"v0.7.29",sentence:(currentBank()[state.idx]||{}).text,settings:state,tokens:tokens.map(function(t){return {t:t.text,p:t.isParticle};}),picked:Array.from(picked),glossLog:state.glossLog};
   var text=JSON.stringify(payload,null,2);
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){document.getElementById("debugArea").textContent="Copied debug snapshot:\n"+text;}).catch(function(){document.getElementById("debugArea").textContent="Copy failed. Here it is:\n"+text;});}
   else{document.getElementById("debugArea").textContent="Clipboard not available. Here it is:\n"+text;}
@@ -514,9 +562,10 @@ document.getElementById("toggleDebugBtn").onclick=function(){state.debugMode=!st
 document.addEventListener("keydown",function(e){
   var tag=(e.target&&e.target.tagName)?e.target.tagName.toLowerCase():""; if(tag==="input"||tag==="textarea")return;
   var k=(e.key||"").toLowerCase();
-  if(k===" "){e.preventDefault(); if(!document.getElementById("checkBtn").disabled)scoreRound(); else if(!document.getElementById("nextBtn").disabled)render(false); return;}
-  if(k==="c" && !document.getElementById("checkBtn").disabled)scoreRound();
-  if(k==="n" && !document.getElementById("nextBtn").disabled)render(false);
+  if((k===" "||k==="n") && !document.getElementById("nextBtn").disabled){
+    e.preventDefault();
+    render(false);
+  }
 });
 
 /* ===== Boot ===== */
