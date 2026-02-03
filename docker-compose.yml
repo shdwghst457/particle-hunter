@@ -1,0 +1,8 @@
+services:
+  particle-hunter:
+    build: .
+    ports:
+      - "8080:80"    # http://localhost:8080
+    volumes:
+      # Live-reload: changes to index.html reflect instantly without rebuilding
+      - ./index.html:/usr/share/nginx/html/index.html
