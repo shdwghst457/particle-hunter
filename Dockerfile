@@ -1,8 +1,13 @@
 # Particle Hunter — static site served by nginx
 FROM nginx:alpine
 
-# Copy the app into nginx's default serve directory
-COPY index.html /usr/share/nginx/html/index.html
+# Copy app code into /app
+COPY index.html /app/index.html
 
-# Expose port 80 inside the container
-EXPOSE 80
+# Drop in custom nginx config (listens on 8082, serves from /app)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose the port
+EXPOSE 8082
+
+# nginx runs automatically — no CMD needed
