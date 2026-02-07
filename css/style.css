@@ -1,0 +1,249 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", Meiryo, sans-serif;
+  background: #f7f7f9;
+  margin: 0;
+  color: #222;
+}
+
+header {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.75rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1rem 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.sentence {
+  font-size: 1.6rem;
+  user-select: none;
+}
+
+.token {
+  display: inline-block;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+
+body:not(.noHover) .token:hover {
+  background: #f0f9ff;
+  box-shadow: inset 0 0 0 1px #bae6fd;
+}
+
+.picked {
+  background: #e0f2fe;
+  box-shadow: inset 0 0 0 1px #7dd3fc;
+}
+
+.good {
+  background: #dcfce7 !important;
+  box-shadow: inset 0 0 0 1px #86efac !important;
+}
+
+.bad {
+  box-shadow: inset 0 0 0 2px #f87171 !important;
+}
+
+.miss {
+  background: #fecaca !important;
+  box-shadow: inset 0 0 0 1px #ef4444 !important;
+}
+
+button {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  padding: 0.55rem 0.8rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+button.primary {
+  background: #111827;
+  color: #fff;
+  border-color: #111827;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: #fff;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.muted {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.banner {
+  display: none;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #7f1d1d;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  margin: 0.75rem 0;
+}
+
+.banner.show {
+  display: block;
+}
+
+.banner.good {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #065f46;
+}
+
+.debug {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
+  padding: 0.5rem;
+  border-radius: 8px;
+  color: #374151;
+}
+
+.next-success {
+  box-shadow: 0 0 0 2px #22c55e inset;
+}
+
+.next-warn {
+  box-shadow: 0 0 0 2px #fbbf24 inset;
+}
+
+#breakdownBox.bd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}
+
+#err {
+  display: none;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  border-radius: 10px;
+}
+
+#err.show {
+  display: block;
+}
+
+.meaning {
+  font-size: 1.1rem;
+  color: #374151;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-left: 3px solid #3b82f6;
+  border-radius: 6px;
+  margin: 0.75rem 0;
+  display: none;
+}
+
+.meaning.show {
+  display: block;
+}
+
+.train-car {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.5rem 0;
+}
+
+.train-car-text {
+  min-width: 140px;
+  font-weight: 500;
+  font-size: 1.1rem;
+}
+
+.train-car-role {
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 120px;
+  padding-left: 0.75rem;
+  border-left: 2px solid #3b82f6;
+}
+
+.train-car-meaning {
+  color: #6b7280;
+  padding-left: 0.75rem;
+  border-left: 2px solid #d1d5db;
+  flex: 1;
+}
+
+.train-car.engine {
+  background: #fef3c7;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #fbbf24;
+}
+
+.train-car.engine .train-car-role {
+  color: #f59e0b;
+  border-left-color: #f59e0b;
+}
+
+.hidden-particle {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
